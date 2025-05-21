@@ -95,8 +95,8 @@ The bot can be configured using environment variables (recommended for sensitive
 ### 🚀 Setup and Running the Bot
 1.  **Clone the Repository:**
     ```bash
-    git clone <repository_url>
-    cd <repository_directory>
+    git clone https://github.com/Afinnn954/Bot-Binance-Spot-Trading.git
+    cd Bot-Binance-Spot-Trading
     ```
 2.  **Install Dependencies:**
     Create a `requirements.txt` file with the following content:
@@ -281,8 +281,8 @@ Bot dapat dikonfigurasi menggunakan variabel lingkungan (disarankan untuk data s
 ### 🚀 Pengaturan dan Menjalankan Bot
 1.  **Klon Repositori:**
     ```bash
-    git clone <url_repositori>
-    cd <direktori_repositori>
+    git clone https://github.com/Afinnn954/Bot-Binance-Spot-Trading.git
+    cd Bot-Binance-Spot-Trading
     ```
 2.  **Instal Dependensi:**
     Buat file `requirements.txt` dengan konten berikut:
