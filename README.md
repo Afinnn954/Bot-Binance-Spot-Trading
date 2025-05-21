@@ -20,6 +20,9 @@
 ### ✨ Introduction
 SpotAI is designed to automate your spot trading strategies on the Binance exchange. With a user-friendly Telegram interface, you can configure, monitor, and manage trades. The bot supports both real and simulated (mock/testnet) trading, allowing for strategy testing before committing real funds. It also incorporates AI to provide dynamic trading parameters and can alert you to potential whale activities in the market.
 
+### 🙏 Credits / Special Thanks
+* **Concept & Development:** Telegram @JoestarMojo
+* 
 ### 🚀 Key Features
 * **🤖 Telegram Bot Interface:** Easily control and monitor the bot through Telegram commands and inline buttons.
 * **📊 Multiple Trading Modes:** Choose from predefined strategies like "Conservative Scalp," "Consistent Drip," "Balanced Growth," and "Momentum Rider," each with unique risk/reward parameters.
@@ -206,6 +209,9 @@ The bot supports multiple languages for its Telegram interface.
 ### ✨ Pendahuluan
 SpotAI dirancang untuk mengotomatiskan strategi perdagangan spot Anda di bursa Binance. Dengan antarmuka Telegram yang ramah pengguna, Anda dapat mengonfigurasi, memantau, dan mengelola perdagangan. Bot ini mendukung perdagangan riil dan simulasi (mock/testnet), memungkinkan pengujian strategi sebelum menggunakan dana riil. Bot ini juga menggabungkan AI untuk menyediakan parameter perdagangan dinamis dan dapat memberi tahu Anda tentang potensi aktivitas whale di pasar.
 
+### 🙏 Kredit / Terima Kasih Khusus
+* **Konsep & Pengembangan:** Telegram @JoestarMojo
+* 
 ### 🚀 Fitur Utama
 * **🤖 Antarmuka Bot Telegram:** Kontrol dan pantau bot dengan mudah melalui perintah Telegram dan tombol inline.
 * **📊 Mode Perdagangan Beragam:** Pilih dari strategi yang telah ditentukan seperti "Conservative Scalp," "Consistent Drip," "Balanced Growth," dan "Momentum Rider," masing-masing dengan parameter risiko/imbalan yang unik.
