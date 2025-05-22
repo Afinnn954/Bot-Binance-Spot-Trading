@@ -1,4 +1,3 @@
-
 import time
 import json
 import logging
@@ -14,45 +13,96 @@ from datetime import datetime, timedelta
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes, MessageHandler, filters
 from telegram.constants import ParseMode
-
-# --- NEW IMPORTS ---
 import pandas as pd
 import pandas_ta as ta
 import google.generativeai as genai
 import os
-# --- END NEW IMPORTS ---
+from dotenv import load_dotenv
 
-# Configure logging
+print("Script starting...")
+print(f"Current working directory: {os.getcwd()}")
+
+dotenv_path = os.path.join(os.path.dirname(__file__), '.env')
+load_dotenv_success = load_dotenv(dotenv_path=dotenv_path, verbose=True)
+print(f"Trying to load .env from: {dotenv_path}")
+print(f"load_dotenv() executed. Did it find and load a .env file? -> {load_dotenv_success}")
+
+TELEGRAM_BOT_TOKEN_FROM_ENV = os.getenv("TELEGRAM_BOT_TOKEN")
+GEMINI_API_KEY_FROM_ENV = os.getenv("GEMINI_API_KEY")
+ADMIN_USER_IDS_FROM_ENV = os.getenv("ADMIN_USER_IDS")
+BINANCE_API_KEY_FROM_ENV = os.getenv("BINANCE_API_KEY")
+BINANCE_API_SECRET_FROM_ENV = os.getenv("BINANCE_API_SECRET")
+
+print(f"Value of TELEGRAM_BOT_TOKEN from os.getenv: '{TELEGRAM_BOT_TOKEN_FROM_ENV}'")
+print(f"Value of GEMINI_API_KEY from os.getenv: '{GEMINI_API_KEY_FROM_ENV}'")
+print(f"Value of ADMIN_USER_IDS from os.getenv: '{ADMIN_USER_IDS_FROM_ENV}'")
+print(f"Value of BINANCE_API_KEY from os.getenv: '{BINANCE_API_KEY_FROM_ENV}'")
+print(f"Value of BINANCE_API_SECRET from os.getenv: '{BINANCE_API_SECRET_FROM_ENV}'")
+
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     level=logging.INFO
 )
 logger = logging.getLogger(__name__)
 
-# ======== BOT CONFIGURATION ========
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "YOUR_TELEGRAM_BOT_TOKEN")
-ADMIN_USER_IDS_STR = os.getenv("ADMIN_USER_IDS", "123456789") # Comma-separated
-ADMIN_USER_IDS = [int(admin_id.strip()) for admin_id in ADMIN_USER_IDS_STR.split(',') if admin_id.strip()]
+ADMIN_USER_IDS_STR = os.getenv("ADMIN_USER_IDS", "123456789")
+ADMIN_USER_IDS = []
+if ADMIN_USER_IDS_STR and ADMIN_USER_IDS_STR != "123456789":
+    try:
+        ADMIN_USER_IDS = [int(admin_id.strip()) for admin_id in ADMIN_USER_IDS_STR.split(',') if admin_id.strip()]
+    except ValueError:
+        logger.error(f"ADMIN_USER_IDS ('{ADMIN_USER_IDS_STR}') contains non-integer values or is not a comma-separated list of numbers. Please check your .env file.")
+        ADMIN_USER_IDS = []
+elif ADMIN_USER_IDS_STR == "123456789" and ADMIN_USER_IDS_FROM_ENV == "123456789":
+     logger.warning("ADMIN_USER_IDS is using the default placeholder value. Ensure it is set correctly if you need specific admin users.")
+     ADMIN_USER_IDS = [int(admin_id.strip()) for admin_id in ADMIN_USER_IDS_STR.split(',') if admin_id.strip()]
 
-# Binance API configuration
+
 BINANCE_API_KEY = os.getenv("BINANCE_API_KEY", "YOUR_BINANCE_API_KEY")
 BINANCE_API_SECRET = os.getenv("BINANCE_API_SECRET", "YOUR_BINANCE_API_SECRET")
 BINANCE_API_URL = "https://api.binance.com"
 BINANCE_TEST_API_URL = "https://testnet.binance.vision"
 
-# --- NEW: Gemini AI Configuration ---
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "YOUR_GEMINI_API_KEY")
+
+print(f"Final TELEGRAM_BOT_TOKEN variable for script: '{TELEGRAM_BOT_TOKEN}'")
+print(f"Final GEMINI_API_KEY variable for script: '{GEMINI_API_KEY}'")
+print(f"Final ADMIN_USER_IDS_STR for script: '{ADMIN_USER_IDS_STR}'")
+print(f"Final ADMIN_USER_IDS for script: {ADMIN_USER_IDS}")
+print(f"Final BINANCE_API_KEY for script: '{BINANCE_API_KEY}'")
+print(f"Final BINANCE_API_SECRET for script: '{BINANCE_API_SECRET}'")
+
+
+if not TELEGRAM_BOT_TOKEN_FROM_ENV:
+    logger.critical("CRITICAL: TELEGRAM_BOT_TOKEN was not found by os.getenv after attempting to load .env. Likely .env file not found/readable or key is missing/empty in .env. Exiting.")
+    exit()
+elif TELEGRAM_BOT_TOKEN == "YOUR_TELEGRAM_BOT_TOKEN":
+    logger.critical("CRITICAL: TELEGRAM_BOT_TOKEN is still the default placeholder value. This means it was not set correctly in your .env file or the .env file was not loaded. Exiting.")
+    exit()
+
+
+gemini_model = None
 if GEMINI_API_KEY and GEMINI_API_KEY != "YOUR_GEMINI_API_KEY":
     try:
         genai.configure(api_key=GEMINI_API_KEY)
-        gemini_model = genai.GenerativeModel('gemini-1.5-flash-latest') # Or 'gemini-pro'
+        gemini_model = genai.GenerativeModel('gemini-1.5-flash-latest')
         logger.info("Gemini AI Model configured successfully.")
     except Exception as e:
         logger.error(f"Failed to configure Gemini AI: {e}. AI features will be disabled.")
         gemini_model = None
 else:
-    logger.warning("GEMINI_API_KEY not set or is placeholder. AI features will be disabled.")
+    if not GEMINI_API_KEY_FROM_ENV:
+        logger.warning("WARNING: GEMINI_API_KEY was not found by os.getenv after attempting to load .env. AI features will be disabled.")
+    elif GEMINI_API_KEY == "YOUR_GEMINI_API_KEY":
+        logger.warning("WARNING: GEMINI_API_KEY is the default placeholder value. This means it was not set in your .env file or the .env file was not loaded. AI features will be disabled.")
+    else:
+        logger.warning("WARNING: GEMINI_API_KEY not set or is placeholder (reason unclear from direct checks). AI features will be disabled.")
     gemini_model = None
+
+logger.info("Initial configuration and checks complete. Continuing with bot setup...")
+
+
 # --- END NEW: Gemini AI Configuration ---
 
 # --- MULTI-LANGUAGE SUPPORT ---
@@ -1568,7 +1618,7 @@ class TelegramBotHandler:
         if current_row: keyboard.append(current_row)
 
 
-        await update.message.reply_text(
+        await update.effective_message.reply_text(
             _t("welcome_message", chat_id) + "\n" +
             _t("help_prompt_short", chat_id) + "\n" +
             _t("current_admin_chats", chat_id, chat_ids=", ".join(map(str, self.admin_chat_ids))),
@@ -1589,7 +1639,7 @@ class TelegramBotHandler:
         if update.callback_query: # If called from a button
             await update.callback_query.edit_message_text(text_to_send, reply_markup=InlineKeyboardMarkup(keyboard))
         else: # If called by command
-            await update.message.reply_text(text_to_send, reply_markup=InlineKeyboardMarkup(keyboard))
+            await update.effective_message.reply_text(text_to_send, reply_markup=InlineKeyboardMarkup(keyboard))
 
 
     async def help_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1620,7 +1670,7 @@ class TelegramBotHandler:
             _t("help_testapi", chat_id) + "\n" + \
             _t("help_toggletestnet", chat_id) + "\n" + \
             _t("help_setaimode", chat_id)
-        await update.message.reply_text(help_text)
+        await update.effective_message.reply_text(help_text)
 
     async def status_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not await self.is_authorized(update): return
@@ -1666,7 +1716,7 @@ class TelegramBotHandler:
             [InlineKeyboardButton((_t("button_disable_real_trading", chat_id) if tb_cfg.get('use_real_trading') else _t("button_enable_real_trading", chat_id)),
                                  callback_data="toggle_real_trading")]
         ]
-        target = update.callback_query.edit_message_text if update.callback_query else update.message.reply_text
+        target = update.callback_query.edit_message_text if update.callback_query else update.effective_message.reply_text
         try:
             await target(status_text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
         except Exception as e:
@@ -1717,7 +1767,7 @@ class TelegramBotHandler:
             [InlineKeyboardButton((_t("button_disable_real_trading", chat_id) if cfg.get('use_real_trading') else _t("button_enable_real_trading", chat_id)), callback_data="toggle_real_trading")],
             [InlineKeyboardButton(_t("button_back_to_status", chat_id), callback_data="status")]
         ]
-        target = update.callback_query.edit_message_text if update.callback_query else update.message.reply_text
+        target = update.callback_query.edit_message_text if update.callback_query else update.effective_message.reply_text
         try:
             await target(config_text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
         except Exception as e:
@@ -1728,7 +1778,7 @@ class TelegramBotHandler:
         if not await self.is_authorized(update): return
         chat_id = update.effective_chat.id
         if not self.trading_bot:
-            await update.message.reply_text(_t("error_bot_not_initialized", chat_id))
+            await update.effective_message.reply_text(_t("error_bot_not_initialized", chat_id))
             return
 
         args = context.args
@@ -1739,14 +1789,14 @@ class TelegramBotHandler:
                 "use_testnet, use_real_trading, trade_percentage, use_percentage, \n"
                 "daily_loss_limit, daily_profit_target, min_bnb_per_trade, mock_mode, ai_dynamic_mode"
             )
-            await update.message.reply_text(_t("config_param_usage", chat_id, params_list=params_list))
+            await update.effective_message.reply_text(_t("config_param_usage", chat_id, params_list=params_list))
             return
 
         param = args[0].lower()
         value_str = " ".join(args[1:])
 
         if param not in self.trading_bot.config:
-            await update.message.reply_text(_t("config_unknown_param", chat_id, param=param))
+            await update.effective_message.reply_text(_t("config_unknown_param", chat_id, param=param))
             return
 
         original_value = self.trading_bot.config[param]
@@ -1757,14 +1807,14 @@ class TelegramBotHandler:
             elif isinstance(original_value, float): new_value = float(value_str)
             elif isinstance(original_value, str):
                 if param == 'trading_mode' and value_str not in TRADING_MODES and value_str != "ai_dynamic": # ai_dynamic is not a formal mode in TRADING_MODES
-                    await update.message.reply_text(_t("config_invalid_mode", chat_id, modes=", ".join(TRADING_MODES.keys())))
+                    await update.effective_message.reply_text(_t("config_invalid_mode", chat_id, modes=", ".join(TRADING_MODES.keys())))
                     return
                 new_value = value_str
             else:
-                await update.message.reply_text(_t("config_param_unsupported_type", chat_id, param=param))
+                await update.effective_message.reply_text(_t("config_param_unsupported_type", chat_id, param=param))
                 return
         except ValueError:
-            await update.message.reply_text(_t("config_invalid_value_type", chat_id, param=param, expected_type=type(original_value).__name__, value_str=value_str))
+            await update.effective_message.reply_text(_t("config_invalid_value_type", chat_id, param=param, expected_type=type(original_value).__name__, value_str=value_str))
             return
 
         self.trading_bot.config[param] = new_value
@@ -1802,18 +1852,18 @@ class TelegramBotHandler:
                 msg_parts.append(_t("trading_modes_ai_dynamic_mode_disabled", chat_id, previous_mode=self.trading_bot.config.get('trading_mode', 'default')))
 
 
-        await update.message.reply_text("\n".join(msg_parts))
+        await update.effective_message.reply_text("\n".join(msg_parts))
 
     async def trades_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not await self.is_authorized(update): return
         chat_id = update.effective_chat.id
         if not self.trading_bot:
-            await update.message.reply_text(_t("error_bot_not_initialized", chat_id))
+            await update.effective_message.reply_text(_t("error_bot_not_initialized", chat_id))
             return
 
         all_trades = ACTIVE_TRADES + COMPLETED_TRADES
         if not all_trades:
-            await update.message.reply_text(_t("trade_no_trades_recorded", chat_id))
+            await update.effective_message.reply_text(_t("trade_no_trades_recorded", chat_id))
             return
 
         recent_trades = sorted(all_trades, key=lambda x: x.get('timestamp',0), reverse=True)[:10]
@@ -1850,13 +1900,13 @@ class TelegramBotHandler:
             )
         if len(trades_text) > 4090:
             trades_text = trades_text[:4000] + _t("trade_message_truncated", chat_id)
-        await update.message.reply_text(trades_text if trades_text.strip() else _t("trade_no_trades_recorded", chat_id))
+        await update.effective_message.reply_text(trades_text if trades_text.strip() else _t("trade_no_trades_recorded", chat_id))
 
     async def whales_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not await self.is_authorized(update): return
         chat_id = update.effective_chat.id
         if not MOCK_WHALE_TRANSACTIONS:
-            await update.message.reply_text(_t("whale_no_mock_alerts", chat_id))
+            await update.effective_message.reply_text(_t("whale_no_mock_alerts", chat_id))
             return
         recent_whales = sorted(MOCK_WHALE_TRANSACTIONS, key=lambda x: x['id'], reverse=True)[:5]
         whales_text = f"{_t('whale_recent_mock_alerts_title', chat_id)}\n\n"
@@ -1866,27 +1916,27 @@ class TelegramBotHandler:
                 f"{_t('whale_alert_amount', chat_id, amount=whale['amount'], asset_name=whale['token'])} Value: ${whale['value']:,.2f}\n" # Simplified for brevity
                 f"{_t('whale_alert_potential_impact', chat_id, impact=whale['impact'])}\nTime: {whale['time']}\n\n"
             )
-        await update.message.reply_text(whales_text if whales_text.strip() else _t("whale_no_mock_alerts", chat_id))
+        await update.effective_message.reply_text(whales_text if whales_text.strip() else _t("whale_no_mock_alerts", chat_id))
 
     async def stats_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not await self.is_authorized(update): return
         chat_id = update.effective_chat.id
         if not self.trading_bot:
-            await update.message.reply_text(_t("error_bot_not_initialized", chat_id))
+            await update.effective_message.reply_text(_t("error_bot_not_initialized", chat_id))
             return
-        await update.message.reply_text(self.trading_bot.get_daily_stats_message(chat_id))
+        await update.effective_message.reply_text(self.trading_bot.get_daily_stats_message(chat_id))
 
     async def set_percentage_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not await self.is_authorized(update): return
         chat_id = update.effective_chat.id
         if not self.trading_bot:
-            await update.message.reply_text(_t("error_bot_not_initialized", chat_id))
+            await update.effective_message.reply_text(_t("error_bot_not_initialized", chat_id))
             return
         args = context.args
         cfg = self.trading_bot.config
         if not args:
             status_key = "set_percentage_status_enabled" if cfg.get("use_percentage") else "set_percentage_status_disabled"
-            await update.message.reply_text(
+            await update.effective_message.reply_text(
                 _t("set_percentage_current_status", chat_id,
                    status=_t(status_key, chat_id),
                    percentage=cfg.get("trade_percentage", 5.0),
@@ -1899,36 +1949,36 @@ class TelegramBotHandler:
                 try:
                     percentage = float(args[1])
                     if not (0.1 <= percentage <= 100):
-                        await update.message.reply_text(_t("set_percentage_invalid_range", chat_id))
+                        await update.effective_message.reply_text(_t("set_percentage_invalid_range", chat_id))
                         return
                     cfg["trade_percentage"] = percentage
                 except ValueError:
-                    await update.message.reply_text(_t("set_percentage_invalid_value", chat_id))
+                    await update.effective_message.reply_text(_t("set_percentage_invalid_value", chat_id))
                     return
-            await update.message.reply_text(
+            await update.effective_message.reply_text(
                 _t("set_percentage_enabled_success", chat_id,
                    percentage=cfg['trade_percentage'],
                    min_bnb_val=cfg.get('min_bnb_per_trade',0.011))
             )
         elif args[0].lower() in ["off", "disable", "false", "no"]:
             cfg["use_percentage"] = False
-            await update.message.reply_text(_t("set_percentage_disabled_success", chat_id))
+            await update.effective_message.reply_text(_t("set_percentage_disabled_success", chat_id))
         else:
-            await update.message.reply_text(_t("set_percentage_invalid_option", chat_id))
+            await update.effective_message.reply_text(_t("set_percentage_invalid_option", chat_id))
 
     async def test_api_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not await self.is_authorized(update): return
         chat_id = update.effective_chat.id
         if not self.trading_bot:
-            await update.message.reply_text(_t("error_bot_not_initialized", chat_id))
+            await update.effective_message.reply_text(_t("error_bot_not_initialized", chat_id))
             return
         cfg = self.trading_bot.config
         if not cfg.get("api_key") or cfg.get("api_key", "").startswith("YOUR_") or \
            not cfg.get("api_secret") or cfg.get("api_secret", "").startswith("YOUR_"):
-            await update.message.reply_text(_t("error_api_credentials_not_set", chat_id))
+            await update.effective_message.reply_text(_t("error_api_credentials_not_set", chat_id))
             return
 
-        status_msg = await update.message.reply_text(_t("api_test_testing_connection", chat_id))
+        status_msg = await update.effective_message.reply_text(_t("api_test_testing_connection", chat_id))
         if not self.trading_bot.binance_api or \
            self.trading_bot.binance_api.api_key != cfg["api_key"] or \
            self.trading_bot.binance_api.api_secret != cfg["api_secret"] or \
@@ -1980,7 +2030,7 @@ class TelegramBotHandler:
         if not await self.is_authorized(update): return
         chat_id = update.effective_chat.id
         if not self.trading_bot:
-            await update.message.reply_text(_t("error_bot_not_initialized", chat_id))
+            await update.effective_message.reply_text(_t("error_bot_not_initialized", chat_id))
             return
         cfg = self.trading_bot.config
         cfg["use_testnet"] = not cfg.get("use_testnet", False)
@@ -1988,24 +2038,24 @@ class TelegramBotHandler:
         if self.trading_bot.market_analyzer: self.trading_bot.market_analyzer.binance_api = self.trading_bot.binance_api
         if self.trading_bot.whale_detector: self.trading_bot.whale_detector.binance_api = self.trading_bot.binance_api
         mode_key = 'status_testnet' if cfg["use_testnet"] else 'status_production'
-        await update.message.reply_text(_t("api_test_toggle_testnet_success", chat_id, mode=_t(mode_key, chat_id)))
+        await update.effective_message.reply_text(_t("api_test_toggle_testnet_success", chat_id, mode=_t(mode_key, chat_id)))
 
     async def enable_real_trading_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not await self.is_authorized(update): return
         chat_id = update.effective_chat.id
         if not self.trading_bot:
-            await update.message.reply_text(_t("error_bot_not_initialized", chat_id))
+            await update.effective_message.reply_text(_t("error_bot_not_initialized", chat_id))
             return
         cfg = self.trading_bot.config
         if not cfg.get("api_key") or cfg.get("api_key", "").startswith("YOUR_") or \
            not cfg.get("api_secret") or cfg.get("api_secret", "").startswith("YOUR_"):
-            await update.message.reply_text(_t("error_api_credentials_not_set", chat_id))
+            await update.effective_message.reply_text(_t("error_api_credentials_not_set", chat_id))
             return
         if cfg.get("use_testnet", False):
-            await update.message.reply_text(_t("error_real_trading_on_testnet", chat_id))
+            await update.effective_message.reply_text(_t("error_real_trading_on_testnet", chat_id))
             return
 
-        status_msg = await update.message.reply_text(_t("api_test_enable_real_testing_production", chat_id))
+        status_msg = await update.effective_message.reply_text(_t("api_test_enable_real_testing_production", chat_id))
         test_cfg = {**cfg, "use_real_trading": True, "use_testnet": False}
         test_api = BinanceAPI(test_cfg, chat_id)
         account_info = test_api.get_account_info()
@@ -2034,24 +2084,24 @@ class TelegramBotHandler:
         if not await self.is_authorized(update): return
         chat_id = update.effective_chat.id
         if not self.trading_bot:
-            await update.message.reply_text(_t("error_bot_not_initialized", chat_id))
+            await update.effective_message.reply_text(_t("error_bot_not_initialized", chat_id))
             return
         self.trading_bot.config.update({"use_real_trading": False, "mock_mode": True})
         if self.trading_bot.market_analyzer: self.trading_bot.market_analyzer.config["mock_mode"] = True
-        await update.message.reply_text(_t("api_test_disable_real_success", chat_id))
+        await update.effective_message.reply_text(_t("api_test_disable_real_success", chat_id))
 
     async def balance_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not await self.is_authorized(update): return
         chat_id = update.effective_chat.id
         if not self.trading_bot:
-            await update.message.reply_text(_t("error_bot_not_initialized", chat_id))
+            await update.effective_message.reply_text(_t("error_bot_not_initialized", chat_id))
             return
         cfg = self.trading_bot.config
         if not cfg.get("api_key") or cfg.get("api_key","").startswith("YOUR_") or \
            not cfg.get("api_secret") or cfg.get("api_secret","").startswith("YOUR_"):
-            await update.message.reply_text(_t("error_api_credentials_not_set", chat_id))
+            await update.effective_message.reply_text(_t("error_api_credentials_not_set", chat_id))
             return
-        status_msg = await update.message.reply_text(_t("api_test_fetching_balance", chat_id))
+        status_msg = await update.effective_message.reply_text(_t("api_test_fetching_balance", chat_id))
         if not self.trading_bot.binance_api or \
            self.trading_bot.binance_api.api_key != cfg["api_key"] or \
            self.trading_bot.binance_api.api_secret != cfg["api_secret"] or \
@@ -2105,7 +2155,7 @@ class TelegramBotHandler:
         else: text += _t("bnb_pairs_no_quote_found", chat_id)
         if not bnb_base and not bnb_quote: text = _t("bnb_pairs_no_bnb_pairs_found_market_empty", chat_id)
         
-        target = update.callback_query.edit_message_text if update.callback_query else update.message.reply_text
+        target = update.callback_query.edit_message_text if update.callback_query else update.effective_message.reply_text
         try: await target(text)
         except Exception as e:
             logger.error(_t("error_send_bnb_pairs_message_too_long", chat_id, e=e))
@@ -2132,7 +2182,7 @@ class TelegramBotHandler:
                     kb_rows[-1].append(InlineKeyboardButton(_t("button_trade_pair", chat_id, pair_name=p['pair']), callback_data=f"trade_{p['pair']}"))
         else: text += _t("volume_no_high_volume_pairs", chat_id)
         kb_rows.append([InlineKeyboardButton(_t("button_back_to_status", chat_id), callback_data="status")])
-        target = update.callback_query.edit_message_text if update.callback_query else update.message.reply_text
+        target = update.callback_query.edit_message_text if update.callback_query else update.effective_message.reply_text
         await target(text, reply_markup=InlineKeyboardMarkup(kb_rows))
 
     async def trending_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -2155,7 +2205,7 @@ class TelegramBotHandler:
                     kb_rows[-1].append(InlineKeyboardButton(_t("button_trade_pair", chat_id, pair_name=p['pair']), callback_data=f"trade_{p['pair']}"))
         else: text += _t("trending_no_trending_pairs", chat_id)
         kb_rows.append([InlineKeyboardButton(_t("button_back_to_status", chat_id), callback_data="status")])
-        target = update.callback_query.edit_message_text if update.callback_query else update.message.reply_text
+        target = update.callback_query.edit_message_text if update.callback_query else update.effective_message.reply_text
         await target(text, reply_markup=InlineKeyboardMarkup(kb_rows))
 
     async def trading_modes_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -2175,7 +2225,7 @@ class TelegramBotHandler:
         text += f"\n📌 {_t('status_ai_dynamic_mode', chat_id)}: {_t('trading_modes_desc_ai_dynamic', chat_id)}\n"
         
         kb = [[InlineKeyboardButton(_t("button_back_to_config", chat_id), callback_data="config")]]
-        target = update.callback_query.edit_message_text if update.callback_query else update.message.reply_text
+        target = update.callback_query.edit_message_text if update.callback_query else update.effective_message.reply_text
         try: await target(text, reply_markup=InlineKeyboardMarkup(kb))
         except Exception as e:
             logger.error(_t("error_send_trading_modes_message_too_long", chat_id, e=e))
@@ -2205,22 +2255,22 @@ class TelegramBotHandler:
             f"{_t('whale_config_strategy_status', chat_id, strategy=cfg.get('trading_strategy','N/A'))}\n"
             f"{_t('whale_config_threshold_status_mock', chat_id, threshold=cfg.get('whale_threshold',0))}"
         )
-        target = update.callback_query.edit_message_text if update.callback_query else update.message.reply_text
+        target = update.callback_query.edit_message_text if update.callback_query else update.effective_message.reply_text
         await target(text, reply_markup=InlineKeyboardMarkup(kb))
 
     async def start_trading_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not await self.is_authorized(update): return
         chat_id = update.effective_chat.id
         if not self.trading_bot:
-            await update.message.reply_text(_t("error_bot_not_initialized", chat_id))
+            await update.effective_message.reply_text(_t("error_bot_not_initialized", chat_id))
             return
         if self.trading_bot.running:
-             await update.message.reply_text(_t("trading_modes_engine_already_running", chat_id, current_mode=self.trading_bot.config.get('trading_mode','N/A')))
+             await update.effective_message.reply_text(_t("trading_modes_engine_already_running", chat_id, current_mode=self.trading_bot.config.get('trading_mode','N/A')))
              return
         if self.trading_bot.config.get("use_real_trading") and \
            (not self.trading_bot.config.get("api_key") or self.trading_bot.config.get("api_key", "").startswith("YOUR_") or \
             not self.trading_bot.config.get("api_secret") or self.trading_bot.config.get("api_secret", "").startswith("YOUR_")):
-            await update.message.reply_text(_t("trading_modes_cannot_start_real_no_api", chat_id))
+            await update.effective_message.reply_text(_t("trading_modes_cannot_start_real_no_api", chat_id))
             return
         await self.show_trading_mode_selection(update, context, for_starting_trade=True)
 
@@ -2237,19 +2287,19 @@ class TelegramBotHandler:
             text += _t("trading_modes_select_mode_option", chat_id, name=name.replace('_',' ').capitalize(), tp=s['take_profit'], sl=s['stop_loss']) + "\n"
             kb.append([InlineKeyboardButton(f"{action_verb} {name.replace('_',' ').capitalize()}", callback_data=f"{cb_prefix}{name}")])
         kb.append([InlineKeyboardButton(_t("button_cancel_back_to_status", chat_id), callback_data="status")])
-        target = update.callback_query.edit_message_text if update.callback_query else update.message.reply_text
+        target = update.callback_query.edit_message_text if update.callback_query else update.effective_message.reply_text
         await target(text, reply_markup=InlineKeyboardMarkup(kb))
 
     async def stop_trading_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not await self.is_authorized(update): return
         chat_id = update.effective_chat.id
         if not self.trading_bot:
-            await update.message.reply_text(_t("error_bot_not_initialized", chat_id))
+            await update.effective_message.reply_text(_t("error_bot_not_initialized", chat_id))
             return
         if self.trading_bot.stop_trading(chat_id):
-            await update.message.reply_text(_t("trading_modes_stopped_success", chat_id))
+            await update.effective_message.reply_text(_t("trading_modes_stopped_success", chat_id))
         else:
-            await update.message.reply_text(_t("trading_modes_already_stopped", chat_id))
+            await update.effective_message.reply_text(_t("trading_modes_already_stopped", chat_id))
 
     async def set_ai_mode_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not await self.is_authorized(update): return
@@ -2277,7 +2327,7 @@ class TelegramBotHandler:
         else:
             msg = _t("trading_modes_ai_dynamic_mode_disabled", chat_id, previous_mode=cfg.get('trading_mode', 'default'))
         
-        target = update.callback_query.edit_message_text if update.callback_query else update.message.reply_text
+        target = update.callback_query.edit_message_text if update.callback_query else update.effective_message.reply_text
         await target(msg)
         # Optionally, refresh the config or status view
         if update.callback_query: await self.config_command(update, context)
@@ -2413,7 +2463,7 @@ class TelegramBotHandler:
     async def handle_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not await self.is_authorized(update): return
         chat_id = update.effective_chat.id
-        await update.message.reply_text(_t("error_command_only_message", chat_id))
+        await update.effective_message.reply_text(_t("error_command_only_message", chat_id))
 
     async def error_handler(self, update: object, context: ContextTypes.DEFAULT_TYPE):
         logger.error(f"Exception while handling an update: {context.error}", exc_info=context.error)
